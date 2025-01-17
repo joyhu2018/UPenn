@@ -1,0 +1,187 @@
+---
+title: "Word Cloud"
+author: "Annika Hambali"
+date: "2024-07-31"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache.lazy = FALSE) # notice cache=T here
+knitr::opts_chunk$set(fig.height=4, fig.width=7, fig.align = 'center', warning = F)
+
+if(!require('pacman')) {
+  install.packages('pacman')
+}
+pacman::p_load(dplyr, ggplot2, tm, SnowballC, RColorBrewer, wordcloud, glmnet, randomForest, ranger, data.table)
+```
+
+```{r}
+data <- read.csv("data/cv_data.csv", header=TRUE, stringsAsFactors=FALSE)
+
+trump_data_1 <- data[grepl("trump", data$author, ignore.case=TRUE),]
+biden_data_1 <- data[grepl("biden", data$author, ignore.case=TRUE),]
+```
+
+```{r results='hold'}
+library(tm)
+trump.text <- trump_data_1$text
+mycorpus_trump <- VCorpus(VectorSource(trump.text))
+```
+
+Data Cleaning
+
+```{r results=TRUE}
+# Converts all words to lowercase
+mycorpus_trump_clean <- tm_map(mycorpus_trump, content_transformer(tolower))
+# Removes common English stopwords (e.g. "with", "i")
+mycorpus_trump_clean <- tm_map(mycorpus_trump_clean, removeWords, stopwords("english"))
+# Removes any punctuation
+mycorpus_trump_clean <- tm_map(mycorpus_trump_clean, removePunctuation)
+# Removes numbers
+mycorpus_trump_clean <- tm_map(mycorpus_trump_clean, removeNumbers)
+# Stem words
+mycorpus_trump_clean <- tm_map(mycorpus_trump_clean, stemDocument, lazy = TRUE)
+```
+
+Word Frequency Matrix
+
+```{r results=TRUE}
+#Transforms each review into word frequency matrix
+dtm_trump <- DocumentTermMatrix(mycorpus_trump_clean)
+
+inspect(dtm_trump)
+```
+
+Reducing Bag Size
+
+```{r}
+dtm_trump.10 <- removeSparseTerms(dtm_trump, 1-.01)
+inspect(dtm_trump.10)
+```
+
+```{r}
+x_trump <- as.matrix(dtm_trump.10)
+# Assuming we are predicting 'likeCount' or a similar response variable
+y_trump <- trump_data_1$likeCount
+
+# Run LASSO
+set.seed(1)
+result.lasso_trump <- cv.glmnet(x_trump, y_trump, alpha=1)
+
+plot(result.lasso_trump)
+```
+
+```{r}
+coef_trump <- coef(result.lasso_trump, s = "lambda.min")
+
+# Remove intercept and extract non-zero coefficients
+lasso.words_trump <- rownames(coef_trump)
+lasso.coef_trump <- coef_trump[coef_trump[, 1] != 0, 1]
+
+# Remove the intercept term
+lasso.words_trump <- lasso.words_trump[-1]
+lasso.coef_trump <- lasso.coef_trump[-1]
+
+# Ensure frequencies are positive
+valid_indices_trump <- which(lasso.coef_trump > 0)
+valid_coef_trump <- lasso.coef_trump[valid_indices_trump]
+valid_names_trump <- lasso.words_trump[valid_indices_trump]
+
+# Create a named vector of the coefficients
+names(valid_coef_trump) <- valid_names_trump
+
+# Check for any issues with the coefficients
+summary(valid_coef_trump)
+
+# Normalize frequencies to be in a reasonable range
+valid_coef_trump_norm <- scale(valid_coef_trump, center = FALSE, scale = max(valid_coef_trump))
+
+# Load necessary library for word cloud
+library(wordcloud)
+
+# Create the word cloud for Biden
+cor.special <- brewer.pal(8, "Dark2")
+wordcloud(words = names(valid_coef_trump), 
+          freq = abs(valid_coef_trump_norm), 
+          scale = c(3, 0.5), 
+          max.words = 100, 
+          colors = cor.special, 
+          ordered.colors = FALSE)
+```
+
+```{r}
+library(tm)
+biden.text <- biden_data_1$text
+mycorpus_biden <- VCorpus(VectorSource(biden.text))
+```
+
+```{r}
+mycorpus_biden_clean <- tm_map(mycorpus_biden, content_transformer(tolower))
+mycorpus_biden_clean <- tm_map(mycorpus_biden_clean, removeWords, stopwords("english"))
+mycorpus_biden_clean <- tm_map(mycorpus_biden_clean, removePunctuation)
+mycorpus_biden_clean <- tm_map(mycorpus_biden_clean, removeNumbers)
+mycorpus_trump_clean <- tm_map(mycorpus_biden_clean, stemDocument, lazy = TRUE)
+```
+
+```{r}
+dtm_biden <- DocumentTermMatrix(mycorpus_biden_clean)
+
+inspect(dtm_biden)
+```
+
+```{r}
+dtm_biden.10 <- removeSparseTerms(dtm_biden, 1-.01)
+inspect(dtm_biden.10)
+```
+
+```{r}
+x_biden <- as.matrix(dtm_biden.10)
+# Assuming we are predicting 'likeCount' or a similar response variable
+y_biden <- biden_data_1$likeCount
+
+# Run LASSO
+set.seed(1)
+result.lasso_biden <- cv.glmnet(x_biden, y_biden, alpha=1)
+
+plot(result.lasso_biden)
+
+```
+
+```{r}
+coef_biden <- coef(result.lasso_biden, s = "lambda.min")
+
+# Remove intercept and extract non-zero coefficients
+lasso.words_biden <- rownames(coef_biden)
+lasso.coef_biden <- coef_biden[coef_biden[, 1] != 0, 1]
+
+# Remove the intercept term
+lasso.words_biden <- lasso.words_biden[-1]
+lasso.coef_biden <- lasso.coef_biden[-1]
+
+# Ensure frequencies are positive
+valid_indices_biden <- which(lasso.coef_biden > 0)
+valid_coef_biden <- lasso.coef_biden[valid_indices_biden]
+valid_names_biden <- lasso.words_biden[valid_indices_biden]
+
+# Create a named vector of the coefficients
+names(valid_coef_biden) <- valid_names_biden
+
+# Check for any issues with the coefficients
+summary(valid_coef_biden)
+
+# Normalize frequencies to be in a reasonable range
+valid_coef_biden_norm <- scale(valid_coef_biden, center = FALSE, scale = max(valid_coef_biden))
+
+# Load necessary library for word cloud
+library(wordcloud)
+
+# Create the word cloud for Biden
+cor.special <- brewer.pal(8, "Dark2")
+wordcloud(words = names(valid_coef_biden), 
+          freq = abs(valid_coef_biden_norm), 
+          scale = c(3, 0.5), 
+          max.words = 100, 
+          colors = cor.special, 
+          ordered.colors = FALSE)
+
+```
