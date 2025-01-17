@@ -1,0 +1,92 @@
+---
+title: "Toxicity Analysis"
+format: html
+---
+
+## Toxicity Analysis
+
+We perform toxicity analysis using the Detoxify model (a BERT model).
+
+The toxicity analysis provides a score between 0 and 1 for toxicity. It also provides scores from 0 to 1 for other factors, like severe_toxicity, obscene, identity_attack, threat, and more.
+
+```{python}
+!pip install detoxify
+import pandas as pd
+import numpy as np
+from detoxify import Detoxify
+```
+
+Now, we load in raw data from Biden's's tweets, `biden2020.csv` .
+
+```{python}
+df = pd.read_csv('biden2020.csv')
+
+df.head(5)
+```
+
+```{python}
+biden2020_toxicity = df['text'].iloc[0]
+print(biden2020_toxicity)
+print(Detoxify('unbiased').predict(biden2020_toxicity))
+```
+
+```{python}
+# Ensure Detoxify model is properly initialized
+model = Detoxify('unbiased')
+
+# Define the function to get toxicity scores
+def get_toxicity_scores(text):
+    if not isinstance(text, str) or not text.strip():
+        return pd.Series([None]*7, index=['toxicity', 'severe_toxicity', 'obscene', 'identity_attack', 'insult', 'threat', 'sexual_explicit'])
+
+    results = model.predict(text)
+    return pd.Series([results['toxicity'], results['severe_toxicity'], results['obscene'], results['identity_attack'], results['insult'], results['threat'], results['sexual_explicit']],
+                     index=['toxicity', 'severe_toxicity', 'obscene', 'identity_attack', 'insult', 'threat', 'sexual_explicit'])
+
+# Apply the function to the DataFrame
+df[['toxicity', 'severe_toxicity', 'obscene', 'identity_attack', 'insult', 'threat', 'sexual_explicit']] = df['text'].apply(get_toxicity_scores)
+```
+
+```{python}
+df.to_csv('biden2020.csv', index=False)
+
+print("Sentiment analysis completed and results saved to 'biden2020.csv'")
+```
+
+We do the same for Trump.
+
+```{python}
+df = pd.read_csv('trump2020.csv')
+
+df.head(5)
+```
+
+```{python}
+trump2020_toxicity = df['text'].iloc[0]
+print(trump2020_toxicity)
+print(Detoxify('unbiased').predict(trump2020_toxicity))
+```
+
+```{python}
+# Ensure Detoxify model is properly initialized
+model = Detoxify('unbiased')
+
+# Define the function to get toxicity scores
+def get_toxicity_scores(text):
+    if not isinstance(text, str) or not text.strip():
+        return pd.Series([None]*7, index=['toxicity', 'severe_toxicity', 'obscene', 'identity_attack', 'insult', 'threat', 'sexual_explicit'])
+
+    results = model.predict(text)
+    return pd.Series([results['toxicity'], results['severe_toxicity'], results['obscene'], results['identity_attack'], results['insult'], results['threat'], results['sexual_explicit']],
+                     index=['toxicity', 'severe_toxicity', 'obscene', 'identity_attack', 'insult', 'threat', 'sexual_explicit'])
+
+# Apply the function to the DataFrame
+df[['toxicity', 'severe_toxicity', 'obscene', 'identity_attack', 'insult', 'threat', 'sexual_explicit']] = df['text'].apply(get_toxicity_scores)
+
+```
+
+```{python}
+df.to_csv('trump2020.csv', index=False)
+
+print("Sentiment analysis completed and results saved to 'biden2020.csv'")
+```

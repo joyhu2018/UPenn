@@ -1,0 +1,317 @@
+---
+title: "EDA"
+format: html
+---
+
+# EDA
+
+We first load in necessary data frames. We will use `allcombined` as our first data frame, which includes original text and emotion, sentiment, toxicity, and violence analysis.
+
+```{r r Setup, include=FALSE, results='hide', warning=FALSE}
+knitr::opts_chunk$set(echo = F, fig.width=8, fig.height=4, warning = F)
+options(scipen = 0, digits = 3)  ## controls base R output
+
+## Package setup
+if(!require("pacman")) install.packages("pacman")
+
+pacman::p_load(arrow, tidyverse, dplyr, ggplot2, data.table, lubridate, plotROC, usmap, glmnet, knitr, xtable, vader, cowplot, gridExtra)
+```
+
+```{r loading in allcombined}
+allcombined <- read_parquet("../data/backup_final.parquet")
+```
+
+We also set colors for each author. Biden will be dark blue, and Trump will be red.
+
+For our other categorical variable, `emotion_label`, we make JOY yellow, ANGER pink, and SADNESS cyan.
+
+```{r setting colors}
+authorcolors <- c("biden" = "#00AEF3", "trump" = "#E81B23")
+
+emotioncolors <- c("ANGER" = "pink", "JOY" = "yellow", "SADNESS" = "cyan")
+```
+
+## Selecting Validation Data
+
+We must select validation data first. Then, we will save `cv_data` (used for training/testing) and `valid_data` as .csv files to use.
+
+```{r selecting validation data, eval=FALSE}
+set.seed(1)
+
+cv_index <- sample(0:nrow(allcombined), 0.85*nrow(allcombined))
+cv_data <- allcombined[cv_index,]
+#use rest of data to do cross-validation
+
+valid_data <- cv_data[-cv_index,]
+
+write.csv(cv_data, file = "../data/cv_data.csv", row.names = FALSE)
+write.csv(valid_data, file = "../data/valid_data.csv", row.names = FALSE)
+```
+
+## Sentiment for each Person
+
+(Sentiment is expressed through the `compound` column)
+
+```{r sentiment for each person}
+compoundperperson <- allcombined %>% 
+  ggplot(aes(x = author, y = compound, fill = author)) +
+  geom_boxplot() +
+  xlab("President") +
+  ylab("compound") +
+  ggtitle("Sentiment for each Person") +
+  scale_fill_manual(values = authorcolors)
+
+compoundperperson
+```
+
+## Emotion Intensity for each Person
+
+```{r emotion intensity per person}
+emotion_scoreperperson <- allcombined %>% 
+  ggplot(aes(x = author, y = emotion_score, fill = author)) +
+  geom_boxplot() +
+  labs( title = "Emotion Intensity for each Person", x = "President", y = "emotion_score") +
+  scale_fill_manual(values = authorcolors)
+
+emotion_scoreperperson
+
+```
+
+## Frequency of Each Emotion (per person)
+
+```{r frequency of each emotion}
+
+bidenjoy <- nrow(allcombined %>% filter(author == "biden") %>% filter(emotion_label == "JOY"))/nrow(allcombined %>% filter(author == "biden"))
+bidenanger <- nrow(allcombined %>% filter(author == "biden") %>% filter(emotion_label == "ANGER"))/nrow(allcombined %>% filter(author == "biden"))
+bidensad <- nrow(allcombined %>% filter(author == "biden") %>% filter(emotion_label == "SADNESS"))/nrow(allcombined %>% filter(author == "biden"))
+
+trumpjoy <- nrow(allcombined %>% filter(author == "trump") %>% filter(emotion_label == "JOY"))/nrow(allcombined %>% filter(author == "trump"))
+trumpanger <- nrow(allcombined %>% filter(author == "trump") %>% filter(emotion_label == "ANGER"))/nrow(allcombined %>% filter(author == "trump"))
+trumpsad <- nrow(allcombined %>% filter(author == "trump") %>% filter(emotion_label == "SADNESS"))/nrow(allcombined %>% filter(author == "trump"))
+
+
+bidenjoy 
+bidenanger
+bidensad
+
+trumpjoy
+trumpanger
+trumpsad
+
+# Create the data frame
+tweets_data <- data.frame(
+  Sentiment = rep(c("Angry", "Happy", "Sad"), 2),
+  Count = c(trumpanger, trumpjoy, trumpsad, bidenanger, bidenjoy, bidensad),
+  Person = rep(c("Donald Trump", "Joe Biden"), each = 3)
+)
+
+# Create the bar plot
+ggplot(tweets_data, aes(x = Sentiment, y = Count, fill = Person)) +
+  geom_bar(stat = "identity", position = position_dodge())+
+  labs(
+    title = "Comparison of Emotional Tweets between Donald Trump and Joe Biden",
+    x = "Sentiment",
+    y = "Percentage of Tweets"
+  ) +
+    scale_fill_manual(values= c( "#E81B23", "#00AEF3", "#E81B23","#00AEF3", "#E81B23","#00AEF3"))
+
+```
+
+## Sentiment over Time
+
+```{r sentiment over time}
+allcombined$datetime <- as.POSIXct(allcombined$datetime, format = "%Y-%m-%d %H:%M:%S")
+
+intervention_date_election <- as.POSIXct("2020-11-07")
+intervention_date_jan6 <- as.POSIXct("2021-01-06")
+
+weeklysummary <- allcombined %>% 
+  mutate(week = floor_date(datetime, unit = "week")) %>% 
+  group_by(week, author) %>%
+  summarize(weeklycompound = mean(compound), weeklyemotion_score = mean(emotion_score)) %>% 
+  ungroup()
+
+weeklysummary <- weeklysummary[-c(109:109),]
+ #removing row 109 because it is not a full week and as no Trump tweets, and is therefore ungraphable
+
+
+sentimenttime <- weeklysummary %>% 
+  ggplot(aes(x = week, y = weeklycompound, group = author, col = author)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Sentiment over Time", x = "datetime", y = "weekly avg compound") +
+  scale_color_manual(values = authorcolors) +
+  geom_vline(xintercept = as.numeric(intervention_date_election), linetype = "dotted", color = "black") +
+  geom_vline(xintercept = as.numeric(intervention_date_jan6), linetype = "dotted", color = "black") 
+
+sentimenttime
+```
+
+## Emotional Intensity over Time
+
+```{r emotion intensity over time}
+emotion_scoretime <- weeklysummary %>% 
+  ggplot(aes(x = week, y = weeklyemotion_score, group = author, col = author)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Emotion Intensity over Time, Interruption at Week of Nov 7, 2020", x = "datetime", y = "weekly avg emotion_score") +
+  scale_color_manual(values = authorcolors) +
+  geom_vline(xintercept = as.numeric(intervention_date_election), linetype = "dotted", color = "black") +
+  geom_vline(xintercept = as.numeric(intervention_date_jan6), linetype = "dotted", color = "black") 
+
+emotion_scoretime
+
+```
+
+## Likes vs. Emotional Intensity
+
+```{r likes v emotional intensity}
+bidenemotionlike <- allcombined %>% 
+  filter(author == "biden") %>% 
+  ggplot(aes(x = emotion_score, y = likeCount10k, group = emotion_label, color = emotion_label)) +
+  geom_point(size = 1, alpha = .4) +
+  geom_smooth(aes(x = emotion_score, y = likeCount10k, group = emotion_label, color = emotion_label), method = "lm") +
+  labs(title = "Biden's Emotion Score vs. Likes per Emotion Label", x = "emotion_score", y = "likeCount10k") +
+  xlim(0,1) +
+  ylim(0, 3100000) +
+  scale_color_manual(values = emotioncolors)
+
+trumpemotionlike <- allcombined %>% 
+  filter(author == "trump") %>% 
+  ggplot(aes(x = emotion_score, y = likeCount10k, group = emotion_label, color = emotion_label)) +
+  geom_point(size = 1, alpha = .4) +
+  geom_smooth(aes(x = emotion_score, y = likeCount10k, group = emotion_label, color = emotion_label), method = "lm") +
+  labs(title = "Trump's Emotion Score vs. Likes per Emotion Label", x = "emotion_score", y = "likeCount10k") +
+  xlim(0,1) +
+  ylim(0, 3100000) +
+  scale_color_manual(values = emotioncolors)
+
+bidenemotionlike
+trumpemotionlike
+  
+```
+
+## Retweets vs. Emotional Intensity
+
+```{r retweets v emotional intensity}
+bidenemotionretweet <- allcombined %>% 
+  filter(author == "biden") %>% 
+  ggplot(aes(x = emotion_score, y = retweetCount, group = emotion_label, color = emotion_label)) +
+  geom_point(size = 1, alpha = .4) +
+  geom_smooth(aes(x = emotion_score, y = retweetCount, group = emotion_label, color = emotion_label), method = "lm") +
+  labs(title = "Biden's Emotion Score vs. Retweets per Emotion Label", x = "emotion_score", y = "retweetCount") +
+  xlim(0,1) +
+  ylim(0, 2000000) +
+  scale_color_manual(values = emotioncolors)
+
+trumpemotionretweet <- allcombined %>% 
+  filter(author == "trump") %>% 
+  ggplot(aes(x = emotion_score, y = retweetCount, group = emotion_label, color = emotion_label)) +
+  geom_point(size = 1, alpha = .4) +
+  geom_smooth(aes(x = emotion_score, y = retweetCount, group = emotion_label, color = emotion_label), method = "lm") +
+  labs(title = "Trump's Emotion Score vs. Retweets per Emotion Label", x = "emotion_score", y = "retweetCount") +
+  xlim(0,1) +
+  ylim(0, 2000000) +
+  scale_color_manual(values = emotioncolors)
+
+
+bidenemotionretweet
+trumpemotionretweet
+
+```
+
+
+## Moderation Data
+
+### Moderation Flags in Trump's and Biden's Tweets
+
+```{r moderations categorical}
+
+cat_vars <- c('cat_sexual', 'cat_hate', 'cat_harassment', 'cat_self_harm',
+              'cat_sexual_minors', 'cat_hate_threatening', 'cat_violent_graphic',
+              'cat_self_harm_intent', 'cat_self_harm_instructions',
+              'cat_harassment_threatening', 'cat_violence')
+
+create_cat_plot <- function(cat_var) {
+  allcombined %>%
+    group_by(author) %>%
+    summarise(percentage_true = mean(!!sym(cat_var)) * 100) %>%
+    ggplot(aes(x = author, y = percentage_true, fill = author)) +
+    geom_bar(stat = "identity", position = "dodge", fill=authorcolors) +
+    labs(title = paste("Percentage of ", sub("cat_","",cat_var)),
+         x = "Author",
+         y = "Percentage of TRUE") +
+    scale_fill_manual(values = authorcolors) +
+    theme_minimal(base_size=6) +
+    theme(legend_position="none")
+}
+
+cat_plots <- lapply(cat_vars, create_cat_plot)
+grid.arrange(grobs = cat_plots, ncol = 4)
+
+```
+
+```{r moderations values}
+# List of val variables
+val_vars <- c('val_sexual', 'val_hate', 'val_harassment', 'val_self_harm',
+              'val_sexual_minors', 'val_hate_threatening', 'val_violent_graphic',
+              'val_self_harm_intent', 'val_self_harm_instructions',
+              'val_harassment_threatening', 'val_violence')
+
+# Function to create a plot for each val variable
+create_val_plot <- function(val_var) {
+  allcombined %>%
+    group_by(author) %>%
+    summarise(mean_val = mean(!!sym(val_var), na.rm = TRUE)) %>%
+    ggplot(aes(x = author, y = mean_val, fill = author)) +
+    geom_bar(stat = "identity", position = "dodge", fill=authorcolors) +
+    labs(title = paste("Mean Probability of", sub("val_","",val_var)),
+         x = "Author",
+         y = "Mean Probability") +
+    scale_fill_manual(values = c("biden" = "#00AEF3", "trump" = "#E81B23")) +
+    theme_minimal(base_size = 6) +
+    theme(legend_position="none")
+}
+
+# Create a list of plots
+val_plots <- lapply(val_vars, create_val_plot)
+
+# Arrange all plots in a grid
+grid.arrange(grobs = val_plots, ncol = 3)
+```
+
+## Likes vs. All Variables
+
+We plot scatter plots of all variables against like count.
+
+```{r Likes vs. All Variables}
+df <- allcombined %>% 
+  select(likeCount10k, retweetCount:author, starts_with("val_")) %>% 
+  dplyr::select_if(is.numeric)
+
+df_long1 <- df %>% 
+  pivot_longer(cols = c(retweetCount:sexual_explicit), values_to = 'value')
+
+df_long2 <- df %>% 
+  pivot_longer(cols = starts_with("val_"), values_to = 'value', names_to = 'name')
+
+remove_val_prefix <- function(variable) {
+  sub("val_", "", variable)
+}
+
+allvarplot <- ggplot(df_long1) +
+  geom_point(aes(value, likeCount10k), alpha = 0.5, color = "lightgreen") +
+  geom_smooth(aes(value, likeCount10k), method = "lm", color = "violet") +
+  facet_wrap(~name, scales = 'free')
+
+print(allvarplot)
+
+allvalplot <- ggplot(df_long2) +
+  geom_point(aes(value, likeCount10k), alpha = 0.5, color = "lightgreen") +
+  geom_smooth(aes(value, likeCount10k), method = "lm", color = "violet") +
+  facet_wrap(~name, scales = 'free', labeller = labeller(name = remove_val_prefix))
+
+print(allvalplot)
+
+mean(allcombined$likeCount10k)
+```
