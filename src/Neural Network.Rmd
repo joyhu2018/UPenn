@@ -6,9 +6,6 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, cache.lazy = FALSE) # notice cache=T here
-knitr::opts_chunk$set(fig.height=4, fig.width=7, fig.align = 'center', warning = F)
-
 if(!require('pacman')) {
   install.packages('pacman')
 }
@@ -16,8 +13,9 @@ pacman::p_load(ggplot2, dplyr, tidyverse, gridExtra, ggrepel, plotly, skimr, lat
 ```
 
 ```{r}
-cv_data <- read.csv("data/cv_data.csv")
-valid_data <- read.csv("data/valid_data.csv")
+allcombined <- read.csv("/Users/annha/OneDrive/Documents/UPenn/data/allcombined.csv")
+cv_data <- read.csv("/Users/annha/OneDrive/Documents/UPenn/data/cv_data.csv")
+valid_data <-  read.csv("/Users/annha/OneDrive/Documents/UPenn/data/valid_data.csv")
 ```
 
 Virtual Environment
@@ -26,21 +24,6 @@ Virtual Environment
 reticulate::conda_create("project")
 ```
 
-Tensorflow and Keras
-
-```{r, eval=FALSE}
-if(!require("tensorflow"))
-  remotes::install_github("rstudio/tensorflow")
-library(tensorflow)
-install_tensorflow(envname="project")
-```
-
-```{r eval = FALSE}
-if(!require("keras"))
-  devtools::install_github("rstudio/keras")
-library(keras)
-install_keras(envname="project")
-```
 
 ```{r}
 use_condaenv("project", required=TRUE)
@@ -49,11 +32,13 @@ use_condaenv("project", required=TRUE)
 Splitting Data
 
 ```{r}
+cv_short <- cv_data %>% select(-retweetCount, -id, -text, -datetime)
 y_train <- data.matrix(cv_data[, c('likeCount10k')])
-x_train <- data.matrix(cv_data[, c('emotion_label', 'emotion_score', 'compound', 'pos', 'neu', 'neg', 'frustration', 'god', 'grievance', 'hate', 'jealousy', 'threat', 'violence', 'toxicity', 'severe_toxicity', 'identity_attack', 'insult', 'threatening')])
+x_train <- data.matrix(cv_short)
 
+val_short <- valid_data %>% select(-retweetCount, -id, -text, -datetime)
 y_val <- data.matrix(valid_data[, c('likeCount10k')])
-x_val <- data.matrix(valid_data[, c('emotion_label', 'emotion_score', 'compound', 'pos', 'neu', 'neg', 'frustration', 'god', 'grievance', 'hate', 'jealousy', 'threat', 'violence', 'toxicity', 'severe_toxicity', 'identity_attack', 'insult', 'threatening')])
+x_val <- data.matrix(val_short)
 ```
 
 Building Neural Network
@@ -102,13 +87,14 @@ model.pred <- predict(model, x_val)
 
 mse <- mean((model.pred - y_val)^2)
 mse
-```
-model.pred <- predict(model, valid_data)
+
+model.pred <- predict(model, x_val)
 error_model.final <- mean((valid_data$likeCount10k-model.pred)^2)
-error_model
+error_model.final
 
 results <- model %>% 
   evaluate(
     x_val, y_val
-  )
+  )
 results
+```
