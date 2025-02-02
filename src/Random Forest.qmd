@@ -18,9 +18,9 @@ pacman::p_load(tidyverse, dplyr, ggplot2, data.table, lubridate, plotROC, usmap,
 ```
 
 ```{r loading in data sets}
-allcombined <- read.csv("data/allcombined.csv", header = TRUE, stringsAsFactors = FALSE)
-cv_data <- read.csv("data/cv_data.csv", header = TRUE, stringsAsFactors = FALSE)
-valid_data <- read.csv("data/valid_data.csv", header = TRUE, stringsAsFactors = FALSE)
+allcombined <- read.csv("/Users/joy/Desktop/UPenn/data/allcombined.csv", header = TRUE, stringsAsFactors = FALSE)
+cv_data <- read.csv("/Users/joy/Desktop/UPenn/data/cv_data.csv", header = TRUE, stringsAsFactors = FALSE)
+valid_data <- read.csv("/Users/joy/Desktop/UPenn/data/valid_data.csv", header = TRUE, stringsAsFactors = FALSE)
 ```
 
 First, we try a single tree with all variables named `fitsingletree`.
@@ -52,7 +52,7 @@ Before we finalize our model, we want to optimize and tune our `mtry` and `ntree
 
 ```{r}
 #tuning ntree
-fitrf.tune <- randomForest(likeCount10k~., data = cv_short, mtry=5, ntree=100) # change ntree 
+fitrf.tune <- randomForest(likeCount10k~., data = cv_short, mtry=7, ntree=100) # change ntree 
 plot(fitrf.tune, col="red", pch=16, type="p",
 main="Random Forest testing error")
 
@@ -71,10 +71,10 @@ ylab="mse of mtry")
 lines(1:37, rf.error.p)
 ```
 
-The graph for `ntree` levels around 100, which should be the optimal `ntree`. Based on the graph, `mtry` should be 4. But, we will choose `mtry`=4 for simplicity and efficiency. Now, we construct our final model.
+The graph for `ntree` levels around 100, which should be the optimal `ntree`. Based on the graph, `mtry` should be 7. But, we will choose `mtry`=7 for simplicity and efficiency. Now, we construct our final model.
 
 ```{r}
-fitrf.final <- randomForest(likeCount10k~., data = cv_short, mtry=4, ntree=100) 
+fitrf.final <- randomForest(likeCount10k~., data = cv_short, mtry=7, ntree=100) 
 plot(fitrf.final)
 ```
 
@@ -82,7 +82,7 @@ Finally, we will use `valid_data` to test the error of our final model `fitrf.fi
 
 ```{r}
 fitrf.final.pred <- predict(fitrf.final, valid_data)
-error_fitrf.final <- mean((valid_data$likeCount10k - fitrf.pred)^2)
+error_fitrf.final <- mean((valid_data$likeCount10k - fitrf.final.pred)^2)
 error_fitrf.final
 
 
