@@ -90,13 +90,13 @@ trumpanger <- nrow(allcombined %>% filter(author == "trump") %>% filter(emotion_
 trumpsad <- nrow(allcombined %>% filter(author == "trump") %>% filter(emotion_label == "SADNESS"))/nrow(allcombined %>% filter(author == "trump"))
 
 
-bidenjoy 
-bidenanger
-bidensad
+#bidenjoy 
+#bidenanger
+#bidensad
 
-trumpjoy
-trumpanger
-trumpsad
+#trumpjoy
+#trumpanger
+#trumpsad
 
 # Create the data frame
 tweets_data <- data.frame(
@@ -124,6 +124,9 @@ allcombined$datetime <- as.POSIXct(allcombined$datetime, format = "%Y-%m-%d %H:%
 
 intervention_date_election <- as.POSIXct("2020-11-07")
 intervention_date_jan6 <- as.POSIXct("2021-01-06")
+intervention_date_dnc <- as.POSIXct("2020-08-20")
+intervention_date_rnc <- as.POSIXct("2020-08-27")
+
 
 weeklysummary <- allcombined %>% 
   mutate(week = floor_date(datetime, unit = "week")) %>% 
@@ -142,7 +145,9 @@ sentimenttime <- weeklysummary %>%
   labs(title = "Sentiment over Time", x = "datetime", y = "weekly avg compound") +
   scale_color_manual(values = authorcolors) +
   geom_vline(xintercept = as.numeric(intervention_date_election), linetype = "dotted", color = "black") +
-  geom_vline(xintercept = as.numeric(intervention_date_jan6), linetype = "dotted", color = "black") 
+  geom_vline(xintercept = as.numeric(intervention_date_jan6), linetype = "dotted", color = "black") +
+  geom_vline(xintercept = as.numeric(intervention_date_dnc), linetype = "dotted", color = "black") +
+  geom_vline(xintercept = as.numeric(intervention_date_rnc), linetype = "dotted", color = "black")
 
 sentimenttime
 ```
@@ -154,10 +159,12 @@ emotion_scoretime <- weeklysummary %>%
   ggplot(aes(x = week, y = weeklyemotion_score, group = author, col = author)) +
   geom_line() +
   geom_point() +
-  labs(title = "Emotion Intensity over Time, Interruption at Week of Nov 7, 2020", x = "datetime", y = "weekly avg emotion_score") +
+  labs(title = "Emotion Intensity over Time", x = "datetime", y = "weekly avg emotion_score") +
   scale_color_manual(values = authorcolors) +
   geom_vline(xintercept = as.numeric(intervention_date_election), linetype = "dotted", color = "black") +
-  geom_vline(xintercept = as.numeric(intervention_date_jan6), linetype = "dotted", color = "black") 
+  geom_vline(xintercept = as.numeric(intervention_date_jan6), linetype = "dotted", color = "black") +
+  geom_vline(xintercept = as.numeric(intervention_date_dnc), linetype = "dotted", color = "black") +
+  geom_vline(xintercept = as.numeric(intervention_date_rnc), linetype = "dotted", color = "black")
 
 emotion_scoretime
 
@@ -166,6 +173,8 @@ emotion_scoretime
 ## Likes vs. Emotional Intensity
 
 ```{r likes v emotional intensity}
+#scale looks odd due to outliers
+
 bidenemotionlike <- allcombined %>% 
   filter(author == "biden") %>% 
   ggplot(aes(x = emotion_score, y = likeCount10k, group = emotion_label, color = emotion_label)) +
@@ -173,7 +182,7 @@ bidenemotionlike <- allcombined %>%
   geom_smooth(aes(x = emotion_score, y = likeCount10k, group = emotion_label, color = emotion_label), method = "lm") +
   labs(title = "Biden's Emotion Score vs. Likes per Emotion Label", x = "emotion_score", y = "likeCount10k") +
   xlim(0,1) +
-  ylim(0, 3100000) +
+  ylim(0, 3000) +
   scale_color_manual(values = emotioncolors)
 
 trumpemotionlike <- allcombined %>% 
@@ -183,7 +192,7 @@ trumpemotionlike <- allcombined %>%
   geom_smooth(aes(x = emotion_score, y = likeCount10k, group = emotion_label, color = emotion_label), method = "lm") +
   labs(title = "Trump's Emotion Score vs. Likes per Emotion Label", x = "emotion_score", y = "likeCount10k") +
   xlim(0,1) +
-  ylim(0, 3100000) +
+  ylim(0, 3000) +
   scale_color_manual(values = emotioncolors)
 
 bidenemotionlike
